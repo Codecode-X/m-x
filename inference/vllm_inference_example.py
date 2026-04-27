@@ -30,9 +30,9 @@ import PIL
 # 导入正则表达式库，用于清理输出文本中的 latent token 内容
 import re
 
-# 指定 Monet-7B 模型的本地路径（需要用户自行修改为实际路径）
-# 可以从 HuggingFace 下载：https://huggingface.co/NOVAglow646/Monet-7B
-model_path = 'Path/to/your/model'
+# 指定 Monet-7B 模型路径：优先读取环境变量，默认使用 HuggingFace 官方仓库
+# 你也可以设置为本地路径，例如：/data/models/Monet-7B
+model_path = os.environ.get("MONET_MODEL_PATH", "NOVAglow646/Monet-7B")
 
 
 def replace_abs_vis_token_content(s: str) -> str:
