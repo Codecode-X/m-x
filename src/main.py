@@ -22,6 +22,9 @@ import pdb
 seed_everything(seed=42)
 args=get_args()
 
+os.environ["WANDB_MODE"] = "disabled" # 禁用wandb
+
+
 # Optional: enable anomaly detection when debugging in-place grad issues
 if os.environ.get("TORCH_ANOMALY", "0") == "1":
     try:
@@ -53,13 +56,17 @@ patch=14 # processor.image_processor.patch_size
 processor = AutoProcessor.from_pretrained(args.load_model_path, use_fast=True, trust_remote_code=True)
 
 if _rank == 0:
-    # Rewrite deprecated preprocessor.json into video_preprocessor.json by re-saving once
+    # Only re-save processor when load_model_path is a real local directory.
+    # If a HF repo id is used (e.g. Qwen/Qwen2.5-VL-7B-Instruct), writing to it would
+    # create a shadow local folder and break subsequent from_pretrained resolution.
     try:
-        processor.save_pretrained(args.load_model_path)
-        if args.wandb_name is not None:
-            wandb.init(project='Latent-Think',entity="Latent-Think",name=args.wandb_name,config={"ce_emphasize_factor":args.ce_emphasize_factor,"sft_analysis_ratio":args.sft_analysis_ratio})
+        if os.path.isdir(args.load_model_path):
+            processor.save_pretrained(args.load_model_path)
     except Exception as _e:
         logging.debug(f"Processor save_pretrained skip: {_e}")
+    if args.wandb_name is not None:
+        # wandb.init(project='Latent-Think',entity="Latent-Think",name=args.wandb_name,config={"ce_emphasize_factor":args.ce_emphasize_factor,"sft_analysis_ratio":args.sft_analysis_ratio})
+        wandb.init(project='Latent-Think',entity="Latent-Think",name=args.wandb_name,config={"ce_emphasize_factor":args.ce_emphasize_factor})
 
 processor.tokenizer.add_tokens("<abs_vis_token_pad>", special_tokens=True)
 processor.tokenizer.add_tokens("<abs_vis_token>", special_tokens=True)

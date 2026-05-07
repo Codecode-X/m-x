@@ -1,4 +1,6 @@
 """
+source /home/xiaojunhao/miniconda3/etc/profile.d/conda.sh && conda activate monet
+
 本文件的作用：推理示例脚本（快速上手体验 Monet-7B 模型）
 
 这是整个项目中最简单、最直接的入口文件，只有 41 行，演示了：
@@ -81,9 +83,22 @@ def main():
                 "role": "user",          # 用户角色
                 "content": [
                     # 第一个内容块：文字问题
-                    {"type": "text", "text": "Question:  Which car has the longest rental period? The choices are listed below:\n(A)DB11 COUPE.\n(B) V12 VANTAGES COUPES.\n(C) VANQUISH VOLANTE.\n(D) V12 VOLANTE.\n(E) The image does not feature the time. Put your final answer in \\boxed{}."},
+                    # {"type": "text", "text": "Question:  Which car has the longest rental period? The choices are listed below:\n(A)DB11 COUPE.\n(B) V12 VANTAGES COUPES.\n(C) VANQUISH VOLANTE.\n(D) V12 VOLANTE.\n(E) The image does not feature the time. Put your final answer in \\boxed{}."},
+                    # {"type": "text", "text": "Question: What is the sum of the monthly lease prices of the two cars other than the one with the longest rental period? The choices are listed below:\n(A) $1,999\n(B) $2,297\n(C) $3,895\n(D) $4,296\n(E) $5,894\nPut your final answer in \\boxed{}."},
+                    # {"type": "text", "text": "Question: A customer wants to lease a car for exactly 3 years (36 months) with no excess miles and no end-of-lease purchase. What is the difference between the total lease costs (Total Due At Signing + all monthly payments) of the two eligible cars? The choices are listed below:\n(A) $300\n(B) $10,728\n(C) $11,028\n(D) $17,000\n(E) $17,300\nPut your final answer in \\boxed{}."},
+                    # # 图形推理
+                    # {"type": "text", "text": "Question: This is a graphic reasoning problem. Observe the pattern of the first group of three figures, and choose the correct option to fill the question mark in the second group.\n\nFirst group figures:\n1. A solid black arrow pointing straight upward, with a two-pronged tail pointing downward.\n2. The same arrow rotated clockwise by 45°, now pointing to the upper right, with the tail pointing to the lower left.\n3. The arrow rotated another 45° clockwise, now pointing directly right, with the tail pointing left.\n\nSecond group figures:\n1. The arrow pointing to the upper right (identical to Figure 2 in the first group).\n2. The arrow pointing directly right (identical to Figure 3 in the first group).\n3. ?\n\nOptions:\n(A) Arrow pointing to the upper left\n(B) Arrow pointing straight down\n(C) Arrow pointing straight up\n(D) Arrow pointing to the lower right\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."},
+                    # 空间推理
+                    # {"type": "text", "text": "Question: This is a spatial reasoning problem. Observe the two photos taken from different viewpoints in the same scene, then answer the question about the object's relative position.\n\nScene description:\n- Photo 1: The camera faces two parallel white lounge chairs against a brick wall, with a partial view of a door frame/wall edge on the left.\n- Photo 2: The camera faces a black small armchair (sofa) and several white lounge chairs, showing a tiled floor and a side view of the furniture arrangement.\n\nQuestion: When you took photo 1, where was the black small sofa in relation to you?\n\nOptions:\n(A) On your right\n(B) Behind you\n(C) In front of you to the left\n(D) Behind you to the left\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."}, # 空间推理
+                    # 几何题
+                    {"type": "text", "text": "Question: This is a geometry problem about quadrilaterals and triangle properties. Given the following conditions in quadrilateral ABCD, solve for the length of AD.\n\nProblem description:\n- Quadrilateral ABCD satisfies: \\(AD \\parallel BC\\), \\(\\angle ADC = 120^\\circ\\), and \\(AD = CD\\).\n- Point E is on side CD. Connect AE, and take a point F on segment AE such that \\(AF = BF\\) and \\(\\angle FBC = 60^\\circ\\).\n- The perimeter of quadrilateral BCEF is 12.\n\nQuestion: What is the length of AD?\n\nOptions:\n(A) 3\n(B) 4\n(C) 5\n(D) 6\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."},
+
+
                     # 第二个内容块：图片（打开本地示例图片，转为 RGB 格式）
-                    {"type": "image", "image": PIL.Image.open('images/example_question.png').convert("RGB")}
+                    # {"type": "image", "image": PIL.Image.open('images/example_question.png').convert("RGB")}
+                    # {"type": "image", "image": PIL.Image.open('images/txtl.png').convert("RGB")} # 图形推理
+                    # {"type": "image", "image": PIL.Image.open('images/kjtl.png').convert("RGB")} # 空间推理
+                    {"type": "image", "image": PIL.Image.open('images/jht.png').convert("RGB")} # 几何题
                 ]
             }
         ]
