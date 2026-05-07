@@ -212,4 +212,4 @@ cython_debug/
 # Large models and data
 Qwen/
 data/
-
+*.zip
