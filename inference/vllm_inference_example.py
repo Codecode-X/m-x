@@ -68,8 +68,14 @@ def main():
     # 初始化 vLLM 推理引擎和采样参数
     # tp=1 表示只用 1 张 GPU（tensor parallelism = 1）
     # gpu_memory_utilization=0.8 表示最多使用 80% 的 GPU 显存
-    mllm, sampling_params = vllm_mllm_init(model_path, tp=1, gpu_memory_utilization=0.8)
-    
+
+    # mllm, sampling_params = vllm_mllm_init(model_path, tp=1, gpu_memory_utilization=0.9, max_model_len=16384)
+    # Visual Transformer (Qwen2.5) 需要 num_heads (16) 能够被 tp 整除。因此 tp 只能选能被 16 整除的并发数 (如 1, 2, 4)。
+    # mllm, sampling_params = vllm_mllm_init(model_path, tp=4, gpu_memory_utilization=0.9, max_model_len=16384)
+    # DONE：在测试过程中发现这个模型在 vLLM 中只能单卡运行，否则会有各种奇怪的错误（如显存占用异常、输出异常等）。因此这里改为单卡并适当降低显存利用率以保证稳定。
+    # FIXED：运行前请先执行 inference/patch_vllm.sh 给 vLLM 打补丁（只需执行一次，补丁会备份原文件）。补丁会让 vLLM 支持 Monet 的模型和推理方式。
+    mllm, sampling_params = vllm_mllm_init(model_path, tp=4, gpu_memory_utilization=0.8, max_model_len=16384)
+
     # 加载 Qwen2.5-VL 的处理器（包含 tokenizer 和图像预处理器）
     # trust_remote_code=True 允许加载模型目录里的自定义代码
     processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
@@ -83,7 +89,8 @@ def main():
                 "role": "user",          # 用户角色
                 "content": [
                     # 第一个内容块：文字问题
-                    # {"type": "text", "text": "Question:  Which car has the longest rental period? The choices are listed below:\n(A)DB11 COUPE.\n(B) V12 VANTAGES COUPES.\n(C) VANQUISH VOLANTE.\n(D) V12 VOLANTE.\n(E) The image does not feature the time. Put your final answer in \\boxed{}."},
+                    {"type": "text", "text": "Question:  Which car has the longest rental period? The choices are listed below:\n(A)DB11 COUPE.\n(B) V12 VANTAGES COUPES.\n(C) VANQUISH VOLANTE.\n(D) V12 VOLANTE.\n(E) The image does not feature the time. Put your final answer in \\boxed{}."},
+                    # {"type": "text", "text": "Question:  What is the lowest accuracy reported in the whole chart? Put your final answer within \boxed{}. If you cannot see relevant visual information to infer the answer from the image, just output \boxed{None} and don't guess the answer based on your knowledge."},
                     # {"type": "text", "text": "Question: What is the sum of the monthly lease prices of the two cars other than the one with the longest rental period? The choices are listed below:\n(A) $1,999\n(B) $2,297\n(C) $3,895\n(D) $4,296\n(E) $5,894\nPut your final answer in \\boxed{}."},
                     # {"type": "text", "text": "Question: A customer wants to lease a car for exactly 3 years (36 months) with no excess miles and no end-of-lease purchase. What is the difference between the total lease costs (Total Due At Signing + all monthly payments) of the two eligible cars? The choices are listed below:\n(A) $300\n(B) $10,728\n(C) $11,028\n(D) $17,000\n(E) $17,300\nPut your final answer in \\boxed{}."},
                     # # 图形推理
@@ -91,14 +98,15 @@ def main():
                     # 空间推理
                     # {"type": "text", "text": "Question: This is a spatial reasoning problem. Observe the two photos taken from different viewpoints in the same scene, then answer the question about the object's relative position.\n\nScene description:\n- Photo 1: The camera faces two parallel white lounge chairs against a brick wall, with a partial view of a door frame/wall edge on the left.\n- Photo 2: The camera faces a black small armchair (sofa) and several white lounge chairs, showing a tiled floor and a side view of the furniture arrangement.\n\nQuestion: When you took photo 1, where was the black small sofa in relation to you?\n\nOptions:\n(A) On your right\n(B) Behind you\n(C) In front of you to the left\n(D) Behind you to the left\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."}, # 空间推理
                     # 几何题
-                    {"type": "text", "text": "Question: This is a geometry problem about quadrilaterals and triangle properties. Given the following conditions in quadrilateral ABCD, solve for the length of AD.\n\nProblem description:\n- Quadrilateral ABCD satisfies: \\(AD \\parallel BC\\), \\(\\angle ADC = 120^\\circ\\), and \\(AD = CD\\).\n- Point E is on side CD. Connect AE, and take a point F on segment AE such that \\(AF = BF\\) and \\(\\angle FBC = 60^\\circ\\).\n- The perimeter of quadrilateral BCEF is 12.\n\nQuestion: What is the length of AD?\n\nOptions:\n(A) 3\n(B) 4\n(C) 5\n(D) 6\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."},
+                    # {"type": "text", "text": "Question: This is a geometry problem about quadrilaterals and triangle properties. Given the following conditions in quadrilateral ABCD, solve for the length of AD.\n\nProblem description:\n- Quadrilateral ABCD satisfies: \\(AD \\parallel BC\\), \\(\\angle ADC = 120^\\circ\\), and \\(AD = CD\\).\n- Point E is on side CD. Connect AE, and take a point F on segment AE such that \\(AF = BF\\) and \\(\\angle FBC = 60^\\circ\\).\n- The perimeter of quadrilateral BCEF is 12.\n\nQuestion: What is the length of AD?\n\nOptions:\n(A) 3\n(B) 4\n(C) 5\n(D) 6\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."},
 
 
                     # 第二个内容块：图片（打开本地示例图片，转为 RGB 格式）
-                    # {"type": "image", "image": PIL.Image.open('images/example_question.png').convert("RGB")}
+                    {"type": "image", "image": PIL.Image.open('images/example_question.png').convert("RGB")}
+                    # {"type": "image", "image": PIL.Image.open('/home/xiaojunhao/m-x/data/Monet-SFT-125K/CogCoM/images/0_0.jpg').convert("RGB")}
                     # {"type": "image", "image": PIL.Image.open('images/txtl.png').convert("RGB")} # 图形推理
                     # {"type": "image", "image": PIL.Image.open('images/kjtl.png').convert("RGB")} # 空间推理
-                    {"type": "image", "image": PIL.Image.open('images/jht.png').convert("RGB")} # 几何题
+                    # {"type": "image", "image": PIL.Image.open('images/jht.png').convert("RGB")} # 几何题
                 ]
             }
         ]
@@ -108,11 +116,21 @@ def main():
     inputs = vllm_mllm_process_batch_from_messages(conversations, processor)
     
     # 用 vLLM 引擎生成回答
-    # output 是一个列表，每个元素对应 batch 里的一个输入样本
-    output = vllm_generate(inputs, sampling_params, mllm)
+    # outputs 是一个列表，每个元素对应 batch 里的一个输入样本
+    outputs = vllm_generate(inputs, sampling_params, mllm)
     
     # 取出第一个样本（output[0]）的第一个生成结果（.outputs[0]）的文本
-    raw_output_text = output[0].outputs[0].text
+    raw_output_text = outputs[0].outputs[0].text
+
+    print("@@@@@@@@@@@@@")
+    print(f"---- Batch ----" )
+    print("> Input Conversation:")
+    print(conversations[0])  # 打印第一个样本的输入对话内容（包含文本和图片信息）
+    print("> Model Input:")
+    print(inputs[0])  # 打印第一个样本的模型输入（经过处理后的格式）
+    print("> Model Output:")
+    print(outputs[0].outputs[0].text)  # 打印第一个样本的原始输出文本
+    print("-------------")
     
     # 清理输出：把 latent token 之间的不可读内容替换为 <latent> 占位符
     cleaned_output_text = replace_abs_vis_token_content(raw_output_text)
