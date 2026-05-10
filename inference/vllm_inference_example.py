@@ -99,14 +99,16 @@ def main():
                     # {"type": "text", "text": "Question: This is a spatial reasoning problem. Observe the two photos taken from different viewpoints in the same scene, then answer the question about the object's relative position.\n\nScene description:\n- Photo 1: The camera faces two parallel white lounge chairs against a brick wall, with a partial view of a door frame/wall edge on the left.\n- Photo 2: The camera faces a black small armchair (sofa) and several white lounge chairs, showing a tiled floor and a side view of the furniture arrangement.\n\nQuestion: When you took photo 1, where was the black small sofa in relation to you?\n\nOptions:\n(A) On your right\n(B) Behind you\n(C) In front of you to the left\n(D) Behind you to the left\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."}, # 空间推理
                     # 几何题
                     # {"type": "text", "text": "Question: This is a geometry problem about quadrilaterals and triangle properties. Given the following conditions in quadrilateral ABCD, solve for the length of AD.\n\nProblem description:\n- Quadrilateral ABCD satisfies: \\(AD \\parallel BC\\), \\(\\angle ADC = 120^\\circ\\), and \\(AD = CD\\).\n- Point E is on side CD. Connect AE, and take a point F on segment AE such that \\(AF = BF\\) and \\(\\angle FBC = 60^\\circ\\).\n- The perimeter of quadrilateral BCEF is 12.\n\nQuestion: What is the length of AD?\n\nOptions:\n(A) 3\n(B) 4\n(C) 5\n(D) 6\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."},
-
+                    # VisualPuzzles
+                    {"type": "text", "text": "Question: Divide the following six figures into two categories, so that each category displays its own pattern. Put your final answer in \\boxed{} and briefly explain the reasoning."},
 
                     # 第二个内容块：图片（打开本地示例图片，转为 RGB 格式）
-                    {"type": "image", "image": PIL.Image.open('images/example_question.png').convert("RGB")}
+                    # {"type": "image", "image": PIL.Image.open('images/example_question.png').convert("RGB")}
                     # {"type": "image", "image": PIL.Image.open('/home/xiaojunhao/m-x/data/Monet-SFT-125K/CogCoM/images/0_0.jpg').convert("RGB")}
                     # {"type": "image", "image": PIL.Image.open('images/txtl.png').convert("RGB")} # 图形推理
                     # {"type": "image", "image": PIL.Image.open('images/kjtl.png').convert("RGB")} # 空间推理
                     # {"type": "image", "image": PIL.Image.open('images/jht.png').convert("RGB")} # 几何题
+                    {"type": "image", "image": PIL.Image.open('tmp_visual_puzzles_images/img_0.png').convert("RGB")} # VisualPuzzles 小样本测试
                 ]
             }
         ]

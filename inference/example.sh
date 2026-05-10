@@ -5,4 +5,11 @@
 
 source /home/xiaojunhao/miniconda3/etc/profile.d/conda.sh && conda activate monet
 export LATENT_SIZE=10
+
+# # 关键：在启动 Ray 之前设置所有环境变量
+# export CUDA_VISIBLE_DEVICES=4,5,6,7
+# export VLLM_USE_V1=0  # 暂时禁用V1引擎，用更稳定的V0引擎
+# export LATENT_SIZE=10
+# export RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0  # 修复Ray的GPU环境变量问题
+
 python -m inference.vllm_inference_example

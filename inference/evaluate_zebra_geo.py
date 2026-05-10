@@ -137,6 +137,7 @@ def main():
     # Visual Transformer (Qwen2.5) 需要 num_heads (16) 能够被 tp 整除。因此 tp 只能选能被 16 整除的并发数 (如 1, 2, 4)。
     # mllm, sampling_params = vllm_mllm_init(model_path, tp=4, gpu_memory_utilization=0.9, max_model_len=16384)
     # DONE：在测试过程中发现这个模型在 vLLM 中只能单卡运行，否则会有各种奇怪的错误（如显存占用异常、输出异常等）。因此这里改为单卡并适当降低显存利用率以保证稳定。
+    #  inference/patch_vllm.sh 给 vLLM 打补丁（只需执行一次，补丁会备份原文件）。补丁会让 vLLM 支持 Monet 的模型和推理方式。
     # FIXED：运行前请先执行 inference/patch_vllm.sh 给 vLLM 打补丁（只需执行一次，补丁会备份原文件）。补丁会让 vLLM 支持 Monet 的模型和推理方式。
     mllm, sampling_params = vllm_mllm_init(model_path, tp=4, gpu_memory_utilization=0.8, max_model_len=16384)
 
