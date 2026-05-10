@@ -213,3 +213,4 @@ cython_debug/
 Qwen/
 data/
 *.zip
+tmp_visual_puzzles_images/
