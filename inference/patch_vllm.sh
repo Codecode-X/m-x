@@ -21,9 +21,9 @@ VLLM_PATH=$(python -c "import vllm, os; print(os.path.dirname(vllm.__file__))")
 
 echo "VLLM PATH: $VLLM_PATH"
 
-# backup（只做一次也行）
-cp -n $VLLM_PATH/worker/model_runner.py $VLLM_PATH/worker/bkp-model_runner.py || true
-cp -n $VLLM_PATH/v1/worker/gpu_model_runner.py $VLLM_PATH/v1/worker/bkp-gpu_model_runner.py || true
+# # backup（❗️只备份一次，避免重复备份覆盖原文件）
+# cp -n $VLLM_PATH/worker/model_runner.py $VLLM_PATH/worker/bkp-model_runner.py || true
+# cp -n $VLLM_PATH/v1/worker/gpu_model_runner.py $VLLM_PATH/v1/worker/bkp-gpu_model_runner.py || true
 
 # === 核心替换 ===
 

@@ -25,11 +25,8 @@ import PIL.Image
 # 用 * 导入，所以后面可以直接用这些函数名，不加前缀
 from inference.load_and_gen_vllm import *
 
-# 导入操作系统接口（此处未直接使用，可能是遗留导入）
 import os
-# 导入 PIL 图像库（与 PIL.Image 重复，实际只需要一个）
 import PIL
-# 导入正则表达式库，用于清理输出文本中的 latent token 内容
 import re
 
 # 指定 Monet-7B 模型路径：优先读取环境变量，默认使用 HuggingFace 官方仓库
@@ -72,17 +69,12 @@ def main():
     # mllm, sampling_params = vllm_mllm_init(model_path, tp=1, gpu_memory_utilization=0.9, max_model_len=16384)
     # Visual Transformer (Qwen2.5) 需要 num_heads (16) 能够被 tp 整除。因此 tp 只能选能被 16 整除的并发数 (如 1, 2, 4)。
     # mllm, sampling_params = vllm_mllm_init(model_path, tp=4, gpu_memory_utilization=0.9, max_model_len=16384)
-    # DONE：在测试过程中发现这个模型在 vLLM 中只能单卡运行，否则会有各种奇怪的错误（如显存占用异常、输出异常等）。因此这里改为单卡并适当降低显存利用率以保证稳定。
-    # FIXED：运行前请先执行 inference/patch_vllm.sh 给 vLLM 打补丁（只需执行一次，补丁会备份原文件）。补丁会让 vLLM 支持 Monet 的模型和推理方式。
+    # 😭 DONE：在测试过程中发现这个模型在 vLLM 中只能单卡运行，否则会有各种奇怪的错误（如显存占用异常、输出异常等）。因此这里改为单卡并适当降低显存利用率以保证稳定。
+    # 😜 FIXED：运行前请先执行 inference/patch_vllm.sh 给 vLLM 打补丁（只需执行一次，补丁会备份原文件）。补丁会让 vLLM 支持 Monet 的模型和推理方式。
     mllm, sampling_params = vllm_mllm_init(model_path, tp=4, gpu_memory_utilization=0.8, max_model_len=16384)
 
-    # 加载 Qwen2.5-VL 的处理器（包含 tokenizer 和图像预处理器）
-    # trust_remote_code=True 允许加载模型目录里的自定义代码
     processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
     
-    # 构造输入对话列表
-    # 外层列表：batch（这里只有 1 个样本，所以只有一个元素）
-    # 内层列表：这个样本的多轮对话（这里只有 1 轮 user 消息）
     conversations = [
         [
             {
@@ -100,15 +92,15 @@ def main():
                     # 几何题
                     # {"type": "text", "text": "Question: This is a geometry problem about quadrilaterals and triangle properties. Given the following conditions in quadrilateral ABCD, solve for the length of AD.\n\nProblem description:\n- Quadrilateral ABCD satisfies: \\(AD \\parallel BC\\), \\(\\angle ADC = 120^\\circ\\), and \\(AD = CD\\).\n- Point E is on side CD. Connect AE, and take a point F on segment AE such that \\(AF = BF\\) and \\(\\angle FBC = 60^\\circ\\).\n- The perimeter of quadrilateral BCEF is 12.\n\nQuestion: What is the length of AD?\n\nOptions:\n(A) 3\n(B) 4\n(C) 5\n(D) 6\n\nPut your final answer in \\boxed{} and briefly explain the reasoning."},
                     # VisualPuzzles
-                    {"type": "text", "text": "Question: Divide the following six figures into two categories, so that each category displays its own pattern. Put your final answer in \\boxed{} and briefly explain the reasoning."},
+                    # {"type": "text", "text": "Question: Divide the following six figures into two categories, so that each category displays its own pattern. Put your final answer in \\boxed{} and briefly explain the reasoning."},
 
                     # 第二个内容块：图片（打开本地示例图片，转为 RGB 格式）
-                    # {"type": "image", "image": PIL.Image.open('images/example_question.png').convert("RGB")}
+                    {"type": "image", "image": PIL.Image.open('images/example_question.png').convert("RGB")}
                     # {"type": "image", "image": PIL.Image.open('/home/xiaojunhao/m-x/data/Monet-SFT-125K/CogCoM/images/0_0.jpg').convert("RGB")}
                     # {"type": "image", "image": PIL.Image.open('images/txtl.png').convert("RGB")} # 图形推理
                     # {"type": "image", "image": PIL.Image.open('images/kjtl.png').convert("RGB")} # 空间推理
                     # {"type": "image", "image": PIL.Image.open('images/jht.png').convert("RGB")} # 几何题
-                    {"type": "image", "image": PIL.Image.open('tmp_visual_puzzles_images/img_0.png').convert("RGB")} # VisualPuzzles 小样本测试
+                    # {"type": "image", "image": PIL.Image.open('tmp_visual_puzzles_images/img_0.png').convert("RGB")} # VisualPuzzles 小样本测试
                 ]
             }
         ]
@@ -117,8 +109,6 @@ def main():
     # 把对话格式的输入转换成 vLLM 能接受的格式（包括 prompt 字符串和图像张量）
     inputs = vllm_mllm_process_batch_from_messages(conversations, processor)
     
-    # 用 vLLM 引擎生成回答
-    # outputs 是一个列表，每个元素对应 batch 里的一个输入样本
     outputs = vllm_generate(inputs, sampling_params, mllm)
     
     # 取出第一个样本（output[0]）的第一个生成结果（.outputs[0]）的文本

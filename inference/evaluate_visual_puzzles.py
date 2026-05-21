@@ -84,13 +84,26 @@ def evaluate_dataset(output_csv_path, mllm, sampling_params, processor):
     print(f"正在处理 {len(conversations)} 个样本: VisualPuzzles...")
     print(f"============================================================")
     
-    with open(output_csv_path, 'w', encoding='utf-8', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["Question", "Image Path", "Triggered latent CoT", "Latent CoT Count", "Model Output (raw)", "Model Output (cleaned)", "Model Prediction (boxed)", "Ground Truth (raw)", "Correct Prediction (0/1)"])
+    start_idx = 0
+    if os.path.exists(output_csv_path):
+        with open(output_csv_path, 'r', encoding='utf-8') as f:
+            try:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if len(rows) > 1:
+                    start_idx = len(rows) - 1
+                    print(f"发现已存在的结果文件，已处理 {start_idx} 个样本，将从这之后继续评估...")
+            except Exception as e:
+                print(f"读取已有 CSV 失败: {e}，将重新开始。")
+
+    if start_idx == 0:
+        with open(output_csv_path, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Question", "Image Path", "Triggered latent CoT", "Latent CoT Count", "Model Output (raw)", "Model Output (cleaned)", "Model Prediction (boxed)", "Ground Truth (raw)", "Correct Prediction (0/1)"])
         
     batch_size = 100
 
-    for i in range(0, len(conversations), batch_size):
+    for i in range(start_idx, len(conversations), batch_size):
         batch_convs = conversations[i:i+batch_size]
         batch_questions = questions[i:i+batch_size]
         batch_images = image_paths[i:i+batch_size]
