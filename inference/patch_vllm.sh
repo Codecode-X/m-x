@@ -8,7 +8,8 @@ echo "===== Monet vLLM patch start ====="
 WORK_PATH=$(pwd)
 echo "WORK DIR: $WORK_PATH"
 
-MONET_GPU_MODEL_RUNNER_FILE_PATH="./vllm/monet_gpu_model_runner.py"
+# MONET_GPU_MODEL_RUNNER_FILE_PATH="./vllm/monet_gpu_model_runner.py"
+MONET_GPU_MODEL_RUNNER_FILE_PATH="./inference/vllm/monet_gpu_model_runner.py"
 
 # 检查文件
 if [ ! -f "$MONET_GPU_MODEL_RUNNER_FILE_PATH" ]; then

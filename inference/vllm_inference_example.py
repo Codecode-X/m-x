@@ -1,6 +1,4 @@
 """
-source /home/xiaojunhao/miniconda3/etc/profile.d/conda.sh && conda activate monet
-
 本文件的作用：推理示例脚本（快速上手体验 Monet-7B 模型）
 
 这是整个项目中最简单、最直接的入口文件，只有 41 行，演示了：
@@ -10,6 +8,7 @@ source /home/xiaojunhao/miniconda3/etc/profile.d/conda.sh && conda activate mone
 4. 如何清理输出中 latent token 之间的不可读内容
 
 运行方式（在项目根目录下）：
+    source /home/xiaojunhao/miniconda3/etc/profile.d/conda.sh && conda activate monet
     export LATENT_SIZE=10          # 设置每次 latent 推理生成的向量数量
     python -m inference.vllm_inference_example
 """
