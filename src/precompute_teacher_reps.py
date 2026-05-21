@@ -28,7 +28,7 @@ from src.utils import *
 from src.task import *
 from src.trainer import *
 import random
-import wandb
+import swanlab
 args=get_args()
 assert args.save_model_path != "./checkpoints/", "You must specify the save path of the latent embeddings"
 config = Qwen2_5_VLConfig.from_pretrained(args.load_model_path)

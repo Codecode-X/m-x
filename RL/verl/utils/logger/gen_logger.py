@@ -20,10 +20,6 @@ from typing import List, Tuple
 from ..py_functional import is_package_available
 import os
 
-if is_package_available("wandb"):
-    import wandb  # type: ignore
-
-
 if is_package_available("swanlab"):
     import swanlab  # type: ignore
 
@@ -53,33 +49,6 @@ class ConsoleGenerationLogger(GenerationLogger):
             f.write(text.rstrip() + "\n")'''
 
 @dataclass
-class WandbGenerationLogger(GenerationLogger):
-    def log(self, samples: List[Tuple[str, str, str, float]], step: int) -> None:
-        # Create column names for all samples
-        columns = ["step"] + sum(
-            [[f"input_{i + 1}", f"output_{i + 1}", f"label_{i + 1}", f"score_{i + 1}"] for i in range(len(samples))],
-            [],
-        )
-
-        if not hasattr(self, "validation_table"):
-            # Initialize the table on first call
-            self.validation_table = wandb.Table(columns=columns)
-
-        # Create a new table with same columns and existing data
-        # Workaround for https://github.com/wandb/wandb/issues/2981#issuecomment-1997445737
-        new_table = wandb.Table(columns=columns, data=self.validation_table.data)
-
-        # Add new row with all data
-        row_data = [step]
-        for sample in samples:
-            row_data.extend(sample)
-
-        new_table.add_data(*row_data)
-        wandb.log({"val/generations": new_table}, step=step)
-        self.validation_table = new_table
-
-
-@dataclass
 class SwanlabGenerationLogger(GenerationLogger):
     def log(self, samples: List[Tuple[str, str, str, float]], step: int) -> None:
         swanlab_text_list = []
@@ -94,7 +63,6 @@ class SwanlabGenerationLogger(GenerationLogger):
 
 GEN_LOGGERS = {
     "console": ConsoleGenerationLogger,
-    "wandb": WandbGenerationLogger,
     "swanlab": SwanlabGenerationLogger,
 }
 

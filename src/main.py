@@ -16,13 +16,14 @@ from src.utils import *
 from src.task import *
 from src.trainer import *
 import random
-import wandb
+import swanlab
 from time import time
 import pdb
 seed_everything(seed=42)
 args=get_args()
 
-os.environ["WANDB_MODE"] = "disabled" # 禁用wandb
+# SwanLab API key 设置
+os.environ.setdefault("SWANLAB_API_KEY", "HAb3O3DrEHXUi8o9Id2Q2")
 
 
 # Optional: enable anomaly detection when debugging in-place grad issues
@@ -64,9 +65,8 @@ if _rank == 0:
             processor.save_pretrained(args.load_model_path)
     except Exception as _e:
         logging.debug(f"Processor save_pretrained skip: {_e}")
-    if args.wandb_name is not None:
-        # wandb.init(project='Latent-Think',entity="Latent-Think",name=args.wandb_name,config={"ce_emphasize_factor":args.ce_emphasize_factor,"sft_analysis_ratio":args.sft_analysis_ratio})
-        wandb.init(project='Latent-Think',entity="Latent-Think",name=args.wandb_name,config={"ce_emphasize_factor":args.ce_emphasize_factor})
+    if args.swanlab_name is not None:
+        swanlab.init(project='Latent-Think',experiment_name=args.swanlab_name,config={"ce_emphasize_factor":args.ce_emphasize_factor})
 
 processor.tokenizer.add_tokens("<abs_vis_token_pad>", special_tokens=True)
 processor.tokenizer.add_tokens("<abs_vis_token>", special_tokens=True)
@@ -382,7 +382,7 @@ training_args = SFTConfig(
     gradient_checkpointing=gradient_checkpointing,
     dataset_text_field="",
     dataset_kwargs={"skip_prepare_dataset": True},
-    report_to=['wandb'] if args.wandb_name is not None else [],
+    report_to=['swanlab'] if args.swanlab_name is not None else [],
     logging_dir='./logs/',
     logging_strategy='steps',
     # Avoid FLOPs estimation logs (set to False through env if needed)

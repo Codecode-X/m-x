@@ -20,7 +20,7 @@ torchrun --nproc-per-node=8 --master-port=29501 -m src.main \
   --save_model_path path_to_your_model/Monet_checkpoints/sft_stage1/${SAVE_CKPT} \
   --dataset_root path_to_your_dataset/Monet-SFT-125K \
   --deepspeed ./deepspeed/ds_zero2_gpu.json \
-  --wandb_name ${SAVE_CKPT} \
+  --swanlab_name ${SAVE_CKPT} \
   --ce_emphasize_factor ${CE_EMPHASIZE_FACTOR}
 
   

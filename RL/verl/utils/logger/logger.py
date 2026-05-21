@@ -29,10 +29,6 @@ if is_package_available("mlflow"):
     import mlflow  # type: ignore
 
 
-if is_package_available("wandb"):
-    import wandb  # type: ignore
-
-
 if is_package_available("swanlab"):
     import swanlab  # type: ignore
 
@@ -108,22 +104,6 @@ class TensorBoardLogger(Logger):
         self.writer.close()
 
 
-class WandbLogger(Logger):
-    def __init__(self, config: Dict[str, Any]) -> None:
-        wandb.init(
-            project=config["trainer"]["project_name"],
-            name=config["trainer"]["experiment_name"],
-            config=config,
-            settings=wandb.Settings(init_timeout=300)
-        )
-
-    def log(self, data: Dict[str, Any], step: int) -> None:
-        wandb.log(data=data, step=step)
-
-    def finish(self) -> None:
-        wandb.finish()
-
-
 class SwanlabLogger(Logger):
     def __init__(self, config: Dict[str, Any]) -> None:
         swanlab_key = os.getenv("SWANLAB_API_KEY")
@@ -148,7 +128,6 @@ class SwanlabLogger(Logger):
 
 
 LOGGERS = {
-    "wandb": WandbLogger,
     "mlflow": MlflowLogger,
     "tensorboard": TensorBoardLogger,
     "console": ConsoleLogger,

@@ -271,7 +271,7 @@ class CustomTrainerSFT_STAGE1(SFTTrainer):
     def log(self, logs: dict, start_time: float | None = None):
         """
         重写日志记录函数，把自定义的统计指标（CE 损失、observation 准确率）
-        加入到标准日志中，一并输出到 wandb/终端等。
+        加入到标准日志中，一并输出到 swanlab/终端等。
         """
         # 复制原始日志字典（避免修改原始对象）
         merged = dict(logs)
@@ -290,7 +290,7 @@ class CustomTrainerSFT_STAGE1(SFTTrainer):
             self.observation_token_acc = 0.
             self.observation_token_acc_step = 0
         
-        # 调用父类 log，实际写入 wandb/终端/TensorBoard 等
+        # 调用父类 log，实际写入 swanlab/终端/TensorBoard 等
         return super().log(merged, start_time)
 
 

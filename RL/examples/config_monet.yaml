@@ -95,7 +95,7 @@ trainer:
   max_steps: null
   project_name: easy_r1
   experiment_name: qwen2_5_7b_math_grpo
-  logger: ["console", "wandb"]
+  logger: ["console", "swanlab"]
   nnodes: 1
   n_gpus_per_node: 4
   val_freq: 5  # -1 to disable

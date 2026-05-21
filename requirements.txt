@@ -23,4 +23,4 @@ fastapi
 uvicorn
 pydantic
 modelscope
-wandb
+swanlab

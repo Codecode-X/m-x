@@ -51,7 +51,7 @@ def get_args():
 
     # ===== Training record arguments =====
     parser.add_argument("--log_file", type=str, default='./log.txt')
-    parser.add_argument("--wandb_name", default=None, help="Name for the Weights & Biases run. If None, no W&B logging is done.")
+    parser.add_argument("--swanlab_name", default=None, help="Name for the SwanLab run. If None, no SwanLab logging is done.")
     
     # ==== Custom attention =====
     parser.add_argument("--not_use_4d", action='store_true', default=False)

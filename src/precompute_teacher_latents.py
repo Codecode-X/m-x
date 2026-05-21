@@ -26,7 +26,7 @@ from src.utils import *
 from src.task import *
 from src.trainer import *
 import random
-import wandb
+import swanlab
 import re
 from glob import glob
 

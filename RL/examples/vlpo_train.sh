@@ -5,7 +5,7 @@ set -x
 
 
 export PYTHONUNBUFFERED=1
-export WANDB_API_KEY=your_wandb_api_key
+export SWANLAB_API_KEY=HAb3O3DrEHXUi8o9Id2Q2
 export DEEPSEEK_API_KEY=your_deepseek_api_key
 export monet_DEBUG=0
 

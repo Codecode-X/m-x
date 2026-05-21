@@ -87,7 +87,7 @@ class TrainerConfig:
     max_steps: Optional[int] = None
     project_name: str = "easy_r1"
     experiment_name: str = "demo"
-    logger: Tuple[str] = ("console", "wandb")
+    logger: Tuple[str] = ("console", "swanlab")
     nnodes: int = 1
     n_gpus_per_node: int = 8
     critic_warmup: int = 0
