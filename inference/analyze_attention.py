@@ -6,15 +6,29 @@ Monet-SFT-7B 注意力分配分析脚本
 
 策略：
 1. 用 processor 处理对话，在 assistant 回答区域插入 <abs_vis_token> 和 latent pad tokens
-2. 用 latent_mode=True + output_latent_embeds=True 前向传播，获取 latent embeddings
+2. 用 latent_mode=True + output_latent_embeds=True 前向传播，获取真正的 latent embeddings
 3. 用 latent_mode=False + ce_patch_pos/ce_patch_vec + output_attentions=True 获取注意力权重
 4. 分析每个文本 token 对 latent tokens 的注意力占比
+
+人话解释：
+    步骤1：准备输入
+    - 在模型要回答的位置插入特殊token（<abs_vis_token> + 一堆占位token）。这些占位token就是给latent tokens预留的位置。
+    步骤2：第一次前向传播（获取真正的latent）
+    - 用 latent_mode=True 跑一遍模型，让模型生成真正的 latent embeddings（就是模型的"思考内容"）。
+    步骤3：第二次前向传播（获取注意力）
+    - 用 latent_mode=False 再跑一遍，但这次把步骤2得到的latent embeddings塞回到之前占位的地方，同时要求输出注意力权重。
+    步骤4：分析注意力
+    - 看生成的每个文字token，计算它们把多少注意力分配给了那些latent tokens。
 
 运行方式：
 cd /home/xiaojunhao/m-x && \
 CUDA_VISIBLE_DEVICES=4 python -m inference.analyze_attention
 
-source /home/xiaojunhao/miniconda3/etc/profile.d/conda.sh && conda activate monet && export LATENT_SIZE=10 && export MONET_MODEL_PATH=/home/xiaojunhao/m-x/data/Monet-SFT-7B/stage3 && export CUDA_VISIBLE_DEVICES=4 && cd /home/xiaojunhao/m-x && timeout 600 python -m inference.analyze_attention 2>&1 | grep -v "🚨"
+source /home/xiaojunhao/miniconda3/etc/profile.d/conda.sh \
+    && conda activate monet && export LATENT_SIZE=10 \
+        && export MONET_MODEL_PATH=/home/xiaojunhao/m-x/data/Monet-SFT-7B/stage3 \
+            && export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+                && cd /home/xiaojunhao/m-x && timeout 600 python -m inference.analyze_attention 2>&1 | grep -v "🚨"
 
 """
 
@@ -51,8 +65,8 @@ def replace_abs_vis_token_content(s):
     return pattern.sub(r'\1<latent>\3', s)
 
 
-def load_model(model_path, device="cuda:0", latent_size=10):
-    """加载 Monet 模型（LLM 用 eager attention，视觉用 Flash Attention）"""
+def load_model(model_path, latent_size=10):
+    """加载 Monet 模型（自动多卡分配，解决OOM）"""
     print("=" * 60)
     print("Step 1: 加载 Monet 模型...")
     print("=" * 60)
@@ -60,8 +74,10 @@ def load_model(model_path, device="cuda:0", latent_size=10):
     config = Qwen2_5_VLConfig.from_pretrained(model_path)
     config.text_config._attn_implementation = "eager"  # 只有 LLM 用 eager
     
+    # 核心：自动多卡拆分模型，分摊显存
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-        model_path, config=config, torch_dtype=torch.bfloat16,
+        model_path, config=config, torch_dtype=torch.bfloat16, 
+        device_map="auto", low_cpu_mem_usage=True
     )
     
     processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
@@ -91,49 +107,29 @@ def load_model(model_path, device="cuda:0", latent_size=10):
     for p in model.visual.parameters():
         p.requires_grad = False
     model.eval()
-    model.to(device)
     
-    print(f"✅ 模型加载完成, device={device}")
+    print(f"✅ 模型加载完成，自动分配到 {torch.cuda.device_count()} 张GPU")
     print(f"  latent_start_id={model.config.latent_start_id}, latent_end_id={model.config.latent_end_id}")
     print(f"  latent_token_id={model.config.latent_token_id}")
     
     return model, processor
 
 
-def prepare_input_for_sample(conversation, processor, latent_size, device):
+def prepare_input_for_sample(conversation, processor, latent_size):
     """
     处理输入，在 assistant 回答区域插入 latent tokens。
-    参考训练代码中的做法：
-    1. apply_chat_template 生成 prompt
-    2. replace_latent_placeholder_with_img_pad 处理 latent placeholder
-    3. add_latent_pad_after_auxiliary_img 在 image 后面插入 latent pad tokens
     """
     # 生成 chat template
     prompt_text = processor.apply_chat_template(
         conversation, tokenize=False, add_generation_prompt=True,
     )
     
-    # Step 1: 替换 latent placeholder 为 image pad（如果有的话）
-    # 这里 prompt_text 是 <|im_start|>user ... <|im_end|><|im_start|>assistant
-    # 没有 <abs_vis_token></abs_vis_token>（这是推理，不是训练）
-    # 所以 replace_latent_placeholder_with_img_pad 不会改变什么
     prompt_text = replace_latent_placeholder_with_img_pad(prompt_text)
-    
-    # Step 2: 在 <|im_start|>assistant 后面的 image 区域后面插入 latent pad tokens
-    # 这会生成：<|im_start|>assistant<|vision_start|><|image_pad|><|vision_end|><abs_vis_token><abs_vis_token_pad>...<abs_vis_token_pad></abs_vis_token>
-    # 但实际上推理时 assistant 区域没有 image，只有文本
-    # 我们需要在 assistant 后面直接插入 <abs_vis_token>{latent_pad_str*latent_size}</abs_vis_token>
-    
-    # 实际上 add_latent_pad_after_auxiliary_img 是在 <|vision_start|><|image_pad|><|vision_end|> 后面插入的
-    # 如果 assistant 区域没有图像，这个函数不会做任何事情
-    # 我们需要手动在 <|im_start|>assistant 后面插入 latent tokens
     
     sep_token = "<|im_start|>assistant"
     latent_pad_str = "<abs_vis_token_pad>"
     latent_pad_strs = latent_pad_str * latent_size
     
-    # 在 <|im_start|>assistant 后面插入 <abs_vis_token>{latent_pads}</abs_vis_token>
-    # 这让模型在 latent_mode 下知道需要在哪里做 latent 推理
     prompt_text_with_latent = prompt_text.replace(
         sep_token,
         f"{sep_token}<abs_vis_token>{latent_pad_strs}</abs_vis_token>"
@@ -152,11 +148,12 @@ def prepare_input_for_sample(conversation, processor, latent_size, device):
         max_pixels=8192 * 28 * 28,
     )
     
+    # 统一移动到CUDA，兼容多卡
     model_inputs = {
-        'input_ids': inputs.input_ids.to(device),
-        'attention_mask': inputs.attention_mask.to(device),
-        'pixel_values': inputs.pixel_values.to(device) if inputs.pixel_values is not None else None,
-        'image_grid_thw': inputs.image_grid_thw.to(device) if inputs.image_grid_thw is not None else None,
+        'input_ids': inputs.input_ids.to('cuda'),
+        'attention_mask': inputs.attention_mask.to('cuda'),
+        'pixel_values': inputs.pixel_values.to('cuda') if inputs.pixel_values is not None else None,
+        'image_grid_thw': inputs.image_grid_thw.to('cuda') if inputs.image_grid_thw is not None else None,
     }
     
     prompt_len = inputs.input_ids.shape[1]
@@ -270,7 +267,7 @@ def create_heatmaps(all_matrices, focus_categories, results, output_dir, per_sam
         if m is None:
             continue
         max_show = min(m.shape[0], 80)
-        matrix_show = m[:max_show]
+        matrix_show = m[:max_show].T
         
         fig, ax = plt.subplots(figsize=(max_show * 0.15 + 3, len(focus_categories) * 0.6 + 2))
         im = ax.imshow(matrix_show, cmap=plt.cm.YlOrRd, aspect='auto', vmin=0, vmax=100)
@@ -378,23 +375,23 @@ def main():
     base_image_dir = "/home/xiaojunhao/m-x/data/Monet-SFT-125K"
     output_dir = "/home/xiaojunhao/m-x/inference/attention_analysis_results"
     latent_size = int(os.environ.get("LATENT_SIZE", "10"))
-    
+
     os.makedirs(output_dir, exist_ok=True)
     per_sample_dir = os.path.join(output_dir, "per_sample")
     os.makedirs(per_sample_dir, exist_ok=True)
     
-    num_samples = 2
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    
+    num_samples = 5
+
+    # 自动多卡检测
+    print(f"✅ 检测到GPU数量: {torch.cuda.device_count()}")
     print(f"Model: {model_path}")
     print(f"Dataset: {dataset_path}")
     print(f"Latent size: {latent_size}")
     print(f"Samples: {num_samples}")
-    print(f"Device: {device}")
-    
+
     # Step 1: 加载模型
-    model, processor = load_model(model_path, device, latent_size)
-    
+    model, processor = load_model(model_path, latent_size)
+
     # Step 2: 加载数据集
     print("=" * 60)
     print("Step 2: 加载数据集...")
@@ -416,7 +413,7 @@ def main():
     for i, item in enumerate(data):
         print(f"\n=== Sample {i} ===")
         
-        # 构建对话格式（只取 user 部分）
+        # 构建对话格式
         user_msg = next(msg for msg in item["data"] if msg["role"] == "user")
         conv_content = []
         for block in user_msg["content"]:
@@ -428,9 +425,9 @@ def main():
         
         conversation = [{"role": "user", "content": conv_content}]
         
-        # 准备输入（包含 latent pad tokens）
+        # 准备输入
         model_inputs, prompt_len, image_inputs = prepare_input_for_sample(
-            conversation, processor, latent_size, device
+            conversation, processor, latent_size
         )
         
         # ─── Phase 1: latent_mode=True 前向传播 ───
@@ -440,13 +437,13 @@ def main():
             latent_outputs = model(
                 **model_inputs,
                 latent_mode=True,
-                output_latent_embeds=False,  # 不需要 latent_embeds（需要 alignment_poss，我们没有）
+                output_latent_embeds=False,
                 output_hidden_states=False,
                 use_cache=False,
                 return_dict=True,
             )
         
-        # 提取 ce_patch_pos 和 ce_patch_vec（用于 Phase 2 替换 latent embeddings）
+        # 提取 ce_patch_pos 和 ce_patch_vec
         ce_patch_pos = latent_outputs.ce_patch_pos
         ce_patch_vec = latent_outputs.ce_patch_vec
         
@@ -457,12 +454,9 @@ def main():
             torch.cuda.empty_cache()
             continue
         
-        # 计算 latent token 数量
         num_latents = len(ce_patch_pos[0]) if ce_patch_pos[0] else 0
         print(f"  latent embeddings: {num_latents} tokens")
-        print(f"  ce_patch_pos: {ce_patch_pos}")
         
-        # 解码 input_ids 来看有没有 latent tokens
         input_ids = model_inputs['input_ids'][0].tolist()
         has_latent_start = LATENT_START_ID in input_ids
         has_latent_end = LATENT_END_ID in input_ids
@@ -480,7 +474,6 @@ def main():
         torch.cuda.empty_cache()
         
         # ─── Phase 2: 生成 answer + 提取注意力 ───
-        # Step 2a: 用 latent_mode=False + ce_patch_vec 前向传播获取 KV cache
         print("  Phase 2a: latent_mode=False 前向传播获取 KV cache...")
         
         with torch.inference_mode():
@@ -497,30 +490,20 @@ def main():
         
         past_kv = phase2a_outputs.past_key_values
         print(f"  KV cache 获取成功")
-        
         del phase2a_outputs
         torch.cuda.empty_cache()
         
-        # Step 2b: 手动逐步生成 answer tokens
-        # 由于 model.forward() 在 loss_type=[] 时 logits=None，
-        # 我们需要用 model.model() 获取 hidden_states，然后用 model.lm_head() 计算 logits
+        # Step 2b: 生成 answer tokens
         print("  Phase 2b: 生成 answer tokens...")
-        
         max_new_tokens = 256
         generated_tokens = []
         
-        # 用 Phase 2a 的 KV cache 加速
-        # 逐步生成：每次传一个 token + past KV cache，获取 hidden_states，然后 lm_head 计算 logits
-        next_input_ids = model_inputs['input_ids'][:, -1:]  # 最后一个 token
+        next_input_ids = model_inputs['input_ids'][:, -1:]
         full_attn_mask = model_inputs['attention_mask'].clone()
         past_kv_for_gen = past_kv
         
         with torch.inference_mode():
             for step in range(max_new_tokens):
-                # 使用 past KV cache + 新 token
-                # 注意：使用 KV cache 时不需要传入 pixel_values
-                # 图像的 KV cache 已经在 Phase 2a 的 past_key_values 中
-                # ce_patch_pos/ce_patch_vec 也已经在 Phase 2a 中被替换过了
                 model_out = model.model(
                     input_ids=next_input_ids,
                     attention_mask=full_attn_mask,
@@ -529,17 +512,12 @@ def main():
                     image_grid_thw=None,
                     latent_mode=False,
                     use_cache=True,
-                    ce_patch_pos=None,
-                    ce_patch_vec=None,
                     return_dict=True,
                 )
                 
-                # 用 lm_head 计算 logits
                 hidden_states = model_out.last_hidden_state
                 logits = model.lm_head(hidden_states)
                 next_token_logits = logits[:, -1, :]
-                
-                # greedy decode
                 next_token = next_token_logits.argmax(dim=-1)
                 
                 if next_token.item() == processor.tokenizer.eos_token_id:
@@ -547,12 +525,10 @@ def main():
                 
                 generated_tokens.append(next_token.item())
                 
-                # 更新
-                next_input_ids = next_token.unsqueeze(0)
-                full_attn_mask = torch.cat([
-                    full_attn_mask,
-                    torch.ones(1, 1, dtype=torch.long, device=device)
-                ], dim=1)
+                # ✅ 修复核心：强制统一张量设备到 cuda
+                next_input_ids = next_token.unsqueeze(0).to('cuda')
+                # 强制创建在 cuda 上，解决设备不一致报错
+                full_attn_mask = torch.cat([full_attn_mask, torch.ones_like(next_input_ids, device='cuda')], dim=1)
                 past_kv_for_gen = model_out.past_key_values
                 
                 if step % 50 == 0 and step > 0:
@@ -560,31 +536,21 @@ def main():
                     print(f"    Step {step}: {len(generated_tokens)} tokens, recent: {decoded}")
         
         print(f"  生成完成: {len(generated_tokens)} answer tokens")
-        
-        # 解码输出文本
-        answer_text = processor.tokenizer.decode(generated_tokens, skip_special_tokens=False)
-        cleaned_answer = replace_abs_vis_token_content(answer_text)
-        print(f"  Answer preview: {cleaned_answer[:100]}...")
-        
         del past_kv_for_gen
         torch.cuda.empty_cache()
         
-        # Step 2c: 对完整序列做 output_attentions=True 前向传播
+        # Step 2c: 提取注意力权重
         print("  Phase 2c: 对完整序列提取注意力权重...")
         
-        # 构建完整序列 = prompt + latent + answer
-        full_input_ids = torch.cat([
-            model_inputs['input_ids'],
-            torch.tensor([generated_tokens], dtype=torch.long, device=device)
-        ], dim=1)
-        
-        full_attention_mask = torch.ones(1, full_input_ids.shape[1], dtype=torch.long, device=device)
+        # 构建完整序列（强制统一设备）
+        gen_tensor = torch.tensor([generated_tokens], device='cuda')
+        full_input_ids = torch.cat([model_inputs['input_ids'], gen_tensor], dim=1)
+        full_attention_mask = torch.ones_like(full_input_ids, device='cuda')
         
         total_len = full_input_ids.shape[1]
         attn_size_gb = 28 * 28 * total_len * total_len * 2 / (1024**3)
         print(f"  Total tokens: {total_len}, Attn matrix: {attn_size_gb:.2f} GB")
         
-        # 构建完整的 token ID 列表（用于分类和分析）
         full_ids_list = full_input_ids[0].tolist()
         
         try:
@@ -598,15 +564,12 @@ def main():
                     ce_patch_pos=ce_patch_pos,
                     ce_patch_vec=ce_patch_vec,
                     output_attentions=True,
-                    output_hidden_states=False,
-                    use_cache=False,
                     return_dict=True,
                 )
         except torch.cuda.OutOfMemoryError:
             print("  ❌ OOM! 截断序列...")
             torch.cuda.empty_cache()
             
-            # 找 latent_end 位置
             full_ids_list = full_input_ids[0].tolist()
             latent_end_pos = None
             for j, tid in enumerate(full_ids_list):
@@ -615,8 +578,8 @@ def main():
             
             if latent_end_pos is not None:
                 start_pos = max(0, latent_end_pos - 1500)
-                trunc_ids = full_input_ids[:, start_pos:].to(device)
-                trunc_mask = torch.ones(1, trunc_ids.shape[1], dtype=torch.long, device=device)
+                trunc_ids = full_input_ids[:, start_pos:].to('cuda')
+                trunc_mask = torch.ones_like(trunc_ids, device='cuda')
                 adj_pos = [[p - start_pos for p in pos] for pos in ce_patch_pos]
                 
                 print(f"  截断: {start_pos}~{total_len}")
@@ -631,8 +594,6 @@ def main():
                         ce_patch_pos=adj_pos,
                         ce_patch_vec=ce_patch_vec,
                         output_attentions=True,
-                        output_hidden_states=False,
-                        use_cache=False,
                         return_dict=True,
                     )
                 full_ids_list = full_ids_list[start_pos:]
@@ -651,13 +612,13 @@ def main():
         
         print(f"  ✅ Got {len(all_attentions)} layers, shape: {all_attentions[0].shape}")
         
-        # 分类 token 位置
+        # 分类token
         categories = classify_token_positions(full_ids_list)
         for cn, ps in categories.items():
             if ps:
                 print(f"    {cn}: {len(ps)} tokens")
         
-        # 计算注意力分配
+        # 计算注意力
         alloc = compute_attention_allocation(all_attentions, categories, full_ids_list)
         if alloc is None:
             all_results.append(None)
@@ -670,8 +631,6 @@ def main():
         
         latent_pct = attn_matrix[:, 0].mean()
         print(f"    Latent CoT avg attention: {latent_pct:.2f}%")
-        print(f"    First 5 answer tokens latent attn: {attn_matrix[:5, 0]}")
-        print(f"    Last 5 answer tokens latent attn: {attn_matrix[-5:, 0]}")
         
         all_matrices.append(attn_matrix)
         all_results.append({'num_latents': num_latents})
